@@ -1,15 +1,12 @@
 # 👋 KIMHANJOO
-
 > 인디 게임 개발/기획 | 스트리밍 데이터 기반 개발/기획
 - **관심사:** 호러 협동 게임, 스트리밍 데이터, 게임 경제 시스템, 버추얼 스트리밍
 
 ---
 
 ## 🎵 AI와 함께하는 바이브 코딩
-
 **생각을 코드로, 빠르게 구현합니다.**  
 AI를 협업 도구로 활용하며 아이디어를 즉시 현실로 만듭니다.
-
 > *"필요한 것은 직접 만들고, AI로 속도를 냅니다."*
 
 ---
@@ -24,9 +21,10 @@ AI를 협업 도구로 활용하며 아이디어를 즉시 현실로 만듭니�
 
 **웹 개발**
 
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 ![Socket.io](https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=socketdotio&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
 
@@ -58,6 +56,4 @@ AI를 협업 도구로 활용하며 아이디어를 즉시 현실로 만듭니�
 ---
 
 ## 📫 Contact
-
 - 준비중
-

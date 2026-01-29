@@ -56,4 +56,6 @@ AI를 협업 도구로 활용하며 아이디어를 즉시 현실로 만듭니�
 ---
 
 ## 📫 Contact
-- 준비중
+<a href="mailto:sevendays5252@gmail.com">
+  <img src="https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white">
+</a>

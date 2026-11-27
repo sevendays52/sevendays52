@@ -445,7 +445,7 @@ def heat_level(count: int, max_count: int) -> int:
     return 4
 
 
-def render_languages_svg(stats: dict, theme_name: str) -> str:
+def render_languages_svg(stats: dict, theme_name: str, fixed_height: int) -> str:
     t = THEMES[theme_name]
     width = 392
     pad_x = 26
@@ -456,7 +456,7 @@ def render_languages_svg(stats: dict, theme_name: str) -> str:
 
     title_y = 32
     donut_cx = width / 2
-    donut_cy = 98
+    donut_cy = 96
     donut_r = 42
     donut_stroke = 10
     circumference = 2 * math.pi * donut_r
@@ -474,34 +474,38 @@ def render_languages_svg(stats: dict, theme_name: str) -> str:
         )
         cum_len += seg_len
 
-    table_header_y = 170
-    table_start_y = 192
+    # 2-column compact table so all languages fit cleanly alongside the activity card
+    cols = 2
+    col_gap = 18
+    col_w = (inner_w - col_gap) / cols  # 161px
+    rows = max(1, math.ceil(len(languages) / cols))
+    table_header_y = 168
+    table_start_y = 194
     row_h = 22
-    table_rows = []
-    bar_x = 146
-    bar_max_w = 130
+
+    table_items = []
     for idx, (name, size, color) in enumerate(languages):
-        ry = table_start_y + idx * row_h
-        ratio = size / total_bytes
-        pct = format_pct(ratio)
-        fill_w = max(2.0, ratio * bar_max_w)
+        row = idx // cols
+        col = idx % cols
+        lx = pad_x + col * (col_w + col_gap)
+        ly = table_start_y + row * row_h
+        pct = format_pct(size / total_bytes)
+        display_name = name if len(name) <= 16 else name[:15] + "…"
         row_line = (
-            f'<line x1="0" y1="8" x2="{inner_w}" y2="8" stroke="{t["divider"]}" stroke-opacity="0.6" />'
-            if idx < len(languages) - 1
+            f'<line x1="0" y1="8" x2="{col_w:.1f}" y2="8" stroke="{t["divider"]}" stroke-opacity="0.55" />'
+            if row < rows - 1
             else ""
         )
-        table_rows.append(
-            f'<g transform="translate({pad_x}, {ry})">'
-            f'<circle cx="4" cy="-3.5" r="3.5" fill="{html.escape(color)}" />'
-            f'<text x="14" y="0" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, \'Segoe UI\', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500">{html.escape(name)}</text>'
-            f'<rect x="{bar_x}" y="-6" width="{bar_max_w}" height="4" rx="2" fill="{t["track"]}" />'
-            f'<rect x="{bar_x}" y="-6" width="{fill_w:.1f}" height="4" rx="2" fill="{html.escape(color)}" />'
-            f'<text x="{inner_w}" y="0" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11">{pct}</text>'
+        table_items.append(
+            f'<g transform="translate({lx:.1f}, {ly:.1f})">'
+            f'<circle cx="3.5" cy="-3.5" r="3.2" fill="{html.escape(color)}" />'
+            f'<text x="12" y="0" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, \'Segoe UI\', Helvetica, Arial, sans-serif" font-size="11" font-weight="500">{html.escape(display_name)}</text>'
+            f'<text x="{col_w:.1f}" y="0" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5">{pct}</text>'
             f"{row_line}"
             f"</g>"
         )
 
-    height = table_start_y + max(1, len(languages)) * row_h + 18
+    height = fixed_height
 
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" fill="none">
   <rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="10" fill="{t["bg"]}" stroke="{t["border"]}" />
@@ -518,17 +522,19 @@ def render_languages_svg(stats: dict, theme_name: str) -> str:
   </g>
 
   <g transform="translate({pad_x}, {table_header_y})">
-    <text x="0" y="0" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5" letter-spacing="1">LANGUAGE</text>
-    <text x="{inner_w}" y="0" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5" letter-spacing="1">SHARE</text>
+    <text x="0" y="0" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1">LANGUAGE</text>
+    <text x="{col_w:.1f}" y="0" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1">SHARE</text>
+    <text x="{col_w + col_gap:.1f}" y="0" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1">LANGUAGE</text>
+    <text x="{inner_w}" y="0" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1">SHARE</text>
     <line x1="0" y1="7" x2="{inner_w}" y2="7" stroke="{t["divider"]}" />
   </g>
 
-  {"".join(table_rows)}
+  {"".join(table_items)}
 </svg>
 """
 
 
-def render_activity_svg(stats: dict, theme_name: str) -> str:
+def render_activity_svg(stats: dict, theme_name: str, fixed_height: int) -> str:
     t = THEMES[theme_name]
     width = 392
     pad_x = 26
@@ -556,7 +562,7 @@ def render_activity_svg(stats: dict, theme_name: str) -> str:
             f'<rect x="{gx}" y="{gy}" width="{cell}" height="{cell}" rx="2" fill="{t["heat"][lvl]}" />'
         )
     grass_h = 7 * (cell + gap) - gap  # 88px
-    legend_y = grass_y + grass_h + 20
+    legend_y = grass_y + grass_h + 18
 
     legend_boxes = []
     for lvl in range(5):
@@ -564,16 +570,37 @@ def render_activity_svg(stats: dict, theme_name: str) -> str:
         legend_boxes.append(f'<rect x="{lx}" y="-8" width="9" height="9" rx="1.5" fill="{t["heat"][lvl]}" />')
 
     mid_div_y = legend_y + 18
-    cadence_title_y = mid_div_y + 26
-    cards_y = cadence_title_y + 16
+    cadence_title_y = mid_div_y + 24
+    cards_y = cadence_title_y + 14
     card_gap = 12
     card_w = (inner_w - card_gap) / 2  # 164px
-    card_h = 84
-    meta_y = cards_y + card_h + 24
-    height = meta_y + 20
+    card_h = 78
+
+    div2_y = cards_y + card_h + 20
+    bars_title_y = div2_y + 24
+    bars_y = bars_title_y + 14
+    meta_y = fixed_height - 20
+    bars_h = max(44, meta_y - 22 - bars_y)
+
+    # Last 16 weeks weekly commit volume bars
+    days_16w = days[-112:]
+    weekly_totals = [sum(d["contributionCount"] for d in days_16w[w * 7 : (w + 1) * 7]) for w in range(16)]
+    max_week = max(weekly_totals, default=1) or 1
+    bar_slot = inner_w / 16
+    bar_w = max(8.0, bar_slot - 6.0)
+    weekly_bars = []
+    for w_idx, total in enumerate(weekly_totals):
+        bh = 3.0 if total == 0 else max(6.0, (total / max_week) * bars_h)
+        bx = w_idx * bar_slot + (bar_slot - bar_w) / 2
+        by = bars_h - bh
+        fill = t["heat"][0] if total == 0 else (t["heat"][4] if total >= max_week * 0.6 else t["heat"][2])
+        weekly_bars.append(
+            f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{bh:.1f}" rx="2" fill="{fill}" />'
+        )
 
     now_local = dt.datetime.now(dt.timezone(dt.timedelta(hours=TZ_OFFSET_HOURS))).strftime("%Y-%m-%d %H:%M")
     tz_label = f"UTC{TZ_OFFSET_HOURS:+d}" if TZ_OFFSET_HOURS != 9 else "KST"
+    height = fixed_height
 
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" fill="none">
   <rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="10" fill="{t["bg"]}" stroke="{t["border"]}" />
@@ -604,16 +631,26 @@ def render_activity_svg(stats: dict, theme_name: str) -> str:
 
   <g transform="translate({pad_x}, {cards_y})">
     <rect x="0.5" y="0.5" width="{card_w - 1:.1f}" height="{card_h - 1}" rx="8" fill="{t["panel"]}" stroke="{t["border"]}" />
-    <text x="14" y="24" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10" letter-spacing="1.1">LAST PUSH</text>
-    <text x="14" y="57" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600">{html.escape(format_relative_push(stats["last_push"], stats["today_date"]))}</text>
-    <text x="{card_w - 14:.1f}" y="57" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">{html.escape(stats["last_push"])}</text>
+    <text x="14" y="23" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10" letter-spacing="1.1">LAST PUSH</text>
+    <text x="14" y="54" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600">{html.escape(format_relative_push(stats["last_push"], stats["today_date"]))}</text>
+    <text x="{card_w - 14:.1f}" y="54" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">{html.escape(stats["last_push"])}</text>
 
     <g transform="translate({card_w + card_gap:.1f}, 0)">
       <rect x="0.5" y="0.5" width="{card_w - 1:.1f}" height="{card_h - 1}" rx="8" fill="{t["panel"]}" stroke="{t["border"]}" />
-      <text x="14" y="24" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10" letter-spacing="1.1">30D ACTIVITY</text>
-      <text x="14" y="57" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600">{stats["last_30d_commits"]:,}</text>
-      <text x="{card_w - 14:.1f}" y="57" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">events</text>
+      <text x="14" y="23" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10" letter-spacing="1.1">30D ACTIVITY</text>
+      <text x="14" y="54" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600">{stats["last_30d_commits"]:,}</text>
+      <text x="{card_w - 14:.1f}" y="54" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">events</text>
     </g>
+  </g>
+
+  <line x1="{pad_x}" y1="{div2_y}" x2="{width - pad_x}" y2="{div2_y}" stroke="{t["divider"]}" />
+
+  <text x="{pad_x}" y="{bars_title_y}" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5" letter-spacing="1.4">
+    WEEKLY CADENCE (16W)
+  </text>
+
+  <g transform="translate({pad_x}, {bars_y})">
+    {"".join(weekly_bars)}
   </g>
 
   <text x="{width - pad_x}" y="{meta_y}" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">
@@ -634,14 +671,19 @@ def main() -> None:
     else:
         stats = fetch_via_rest(USERNAME)
 
+    lang_rows = max(1, math.ceil(len(stats["languages"]) / 2))
+    lang_min_height = 194 + lang_rows * 22 + 18
+    act_min_height = 476
+    fixed_height = max(lang_min_height, act_min_height)
+
     for theme_name in ("dark", "light"):
         lang_path = OUT_DIR / f"lang-{theme_name}.svg"
         act_path = OUT_DIR / f"activity-{theme_name}.svg"
-        lang_path.write_text(render_languages_svg(stats, theme_name), encoding="utf-8")
-        act_path.write_text(render_activity_svg(stats, theme_name), encoding="utf-8")
+        lang_path.write_text(render_languages_svg(stats, theme_name, fixed_height), encoding="utf-8")
+        act_path.write_text(render_activity_svg(stats, theme_name, fixed_height), encoding="utf-8")
         print(
-            f"Wrote {lang_path.name} & {act_path.name} (scope={stats['scope']}, repos={stats['repo_count']}, "
-            f"private={stats['private_count']}, {len(stats['languages'])} languages, last_push={stats['last_push']})"
+            f"Wrote {lang_path.name} & {act_path.name} (height={fixed_height}, scope={stats['scope']}, "
+            f"repos={stats['repo_count']}, private={stats['private_count']}, {len(stats['languages'])} languages, last_push={stats['last_push']})"
         )
 
 

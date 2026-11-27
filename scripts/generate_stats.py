@@ -278,6 +278,7 @@ def fetch_via_graphql(username: str, token: str) -> dict:
     days = [d for w in weeks for d in w["contributionDays"]]
     days_27w = days[-189:]  # 27 weeks * 7 days
     last_7d_commits = sum(d["contributionCount"] for d in days[-7:])
+    last_30d_commits = sum(d["contributionCount"] for d in days[-30:])
 
     return {
         "repo_count": target["repositories"]["totalCount"],
@@ -288,6 +289,7 @@ def fetch_via_graphql(username: str, token: str) -> dict:
         "today_pushes": today_pushes,
         "today_commits": today_commits,
         "last_7d_commits": last_7d_commits,
+        "last_30d_commits": last_30d_commits,
         "languages": sorted(
             [(name, size, lang_colors.get(name, "#8b949e")) for name, size in lang_totals.items()],
             key=lambda x: -x[1],
@@ -350,6 +352,7 @@ def fetch_via_rest(username: str) -> dict:
         "today_pushes": max(pushes_today, repos_pushed_today),
         "today_commits": commits_today,
         "last_7d_commits": sum(d["contributionCount"] for d in days[-7:]),
+        "last_30d_commits": sum(d["contributionCount"] for d in days[-30:]),
         "languages": sorted(
             [(name, size, DEFAULT_LANG_COLORS.get(name, "#8b949e")) for name, size in lang_totals.items()],
             key=lambda x: -x[1],
@@ -357,6 +360,20 @@ def fetch_via_rest(username: str) -> dict:
         "days": days,
         "scope": "public",
     }
+
+
+def format_relative_push(last_push: str, today_date: str) -> str:
+    if last_push == "N/A":
+        return "N/A"
+    try:
+        delta = (dt.date.fromisoformat(today_date) - dt.date.fromisoformat(last_push)).days
+    except ValueError:
+        return last_push
+    if delta <= 0:
+        return "today"
+    if delta == 1:
+        return "1d ago"
+    return f"{delta}d ago"
 
 
 def format_pct(ratio: float) -> str:
@@ -531,27 +548,27 @@ def render_svg(stats: dict, theme_name: str) -> str:
 
   <line x1="{right_x}" y1="{right_mid_div_y}" x2="{width - pad_x}" y2="{right_mid_div_y}" stroke="{t["divider"]}" />
 
-  <!-- RIGHT BOTTOM: Today Push & Commit -->
+  <!-- RIGHT BOTTOM: Recent Cadence -->
   <text x="{right_x}" y="{today_title_y}" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5" letter-spacing="1.4">
-    TODAY PUSH &amp; COMMIT
+    RECENT CADENCE
   </text>
   <text x="{width - pad_x}" y="{today_title_y}" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10">
-    {html.escape(stats["today_date"])} ({tz_label})
+    1y {stats["total_contributions"]:,} total
   </text>
 
   <g transform="translate({right_x}, {cards_y})">
-    <!-- Today Pushes -->
+    <!-- Last Push -->
     <rect x="0.5" y="0.5" width="{card_w - 1:.1f}" height="{card_h - 1}" rx="8" fill="{t["panel"]}" stroke="{t["border"]}" />
-    <text x="16" y="24" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10" letter-spacing="1.2">TODAY PUSH</text>
-    <text x="16" y="58" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="600">{stats["today_pushes"]}</text>
-    <text x="{card_w - 16:.1f}" y="58" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5">events</text>
+    <text x="16" y="24" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10" letter-spacing="1.2">LAST PUSH</text>
+    <text x="16" y="58" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600">{html.escape(format_relative_push(stats["last_push"], stats["today_date"]))}</text>
+    <text x="{card_w - 16:.1f}" y="58" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10">{html.escape(stats["last_push"])}</text>
 
-    <!-- Today Commits -->
+    <!-- 30D Activity -->
     <g transform="translate({card_w + card_gap:.1f}, 0)">
       <rect x="0.5" y="0.5" width="{card_w - 1:.1f}" height="{card_h - 1}" rx="8" fill="{t["panel"]}" stroke="{t["border"]}" />
-      <text x="16" y="24" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10" letter-spacing="1.2">TODAY COMMIT</text>
-      <text x="16" y="58" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="600">{stats["today_commits"]}</text>
-      <text x="{card_w - 16:.1f}" y="58" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5">commits</text>
+      <text x="16" y="24" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10" letter-spacing="1.2">30D ACTIVITY</text>
+      <text x="16" y="58" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="26" font-weight="600">{stats["last_30d_commits"]:,}</text>
+      <text x="{card_w - 16:.1f}" y="58" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10">events</text>
     </g>
   </g>
 

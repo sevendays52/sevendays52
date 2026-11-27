@@ -10,7 +10,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/lang-dark.svg" />
     <source media="(prefers-color-scheme: light)" srcset="./assets/lang-light.svg" />
-    <img alt="All Languages" src="./assets/lang-dark.svg" width="392" />
+    <img alt="Agenda Focus &amp; Languages" src="./assets/lang-dark.svg" width="392" />
   </picture>
   &nbsp;
   <picture>

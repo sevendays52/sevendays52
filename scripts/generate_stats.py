@@ -55,13 +55,50 @@ DEFAULT_LANG_COLORS = {
     "CSS": "#563d7c",
     "ShaderLab": "#222c37",
     "HLSL": "#aace60",
+    "Lua": "#000080",
+    "PLpgSQL": "#336790",
+    "Kotlin": "#A97BFF",
+    "Swift": "#F05138",
     "Shell": "#89e051",
     "PowerShell": "#012456",
     "Jupyter Notebook": "#DA5B0B",
+    "C": "#555555",
     "C++": "#f34b7d",
     "Go": "#00ADD8",
     "Rust": "#dea584",
+    "Dockerfile": "#384d54",
+    "Makefile": "#427819",
+    "Wolfram Language": "#dd1100",
 }
+
+IGNORED_ARTIFACT_LANGS = {"Batchfile", "NSIS", "Smalltalk", "Mathematica", "PowerShell"}
+
+AGENDA_RULES = [
+    (
+        "AI Engineering",
+        "LLM · OCR · Labeling · Pipelines",
+        ("ai", "ocr", "llm", "labeling", "codex", "model", "ml", "agent", "gpt", "diffusion", "vision"),
+        {"Python", "Jupyter Notebook"},
+    ),
+    (
+        "Data",
+        "Analytics · SQL · Trends",
+        ("data", "analysis", "trend", "labeling", "sql", "db", "stats", "metric", "analytics", "crawl", "scrape"),
+        {"PLpgSQL", "Wolfram Language", "Python"},
+    ),
+    (
+        "Unity 3D",
+        "C# · Shaders · 3D Rigging",
+        ("unity", "rig", "avatar", "mesh", "3d", "fps", "game", "horror", "shader", "vr", "ar"),
+        {"C#", "ShaderLab", "HLSL", "Lua"},
+    ),
+    (
+        "Virtual Streaming",
+        "VTuber IP · Live Platforms",
+        ("virtual", "soop", "chzzk", "stream", "vtuber", "avatar", "fan", "live", "broadcast"),
+        set(),
+    ),
+]
 
 GRAPHQL_USER_QUERY = """
 query($login: String!, $todayStart: DateTime!, $todayEnd: DateTime!) {
@@ -69,6 +106,7 @@ query($login: String!, $todayStart: DateTime!, $todayEnd: DateTime!) {
     repositories(first: 100, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], isArchived: false) {
       nodes {
         nameWithOwner
+        description
         isPrivate
         pushedAt
         languages(first: 20, orderBy: {field: SIZE, direction: DESC}) {
@@ -85,6 +123,7 @@ query($login: String!, $todayStart: DateTime!, $todayEnd: DateTime!) {
     repositoriesContributedTo(first: 100, contributionTypes: [COMMIT, PULL_REQUEST, REPOSITORY], includeUserRepositories: true) {
       nodes {
         nameWithOwner
+        description
         isPrivate
         isArchived
         pushedAt
@@ -127,6 +166,7 @@ query($todayStart: DateTime!, $todayEnd: DateTime!) {
     repositories(first: 100, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], isArchived: false) {
       nodes {
         nameWithOwner
+        description
         isPrivate
         pushedAt
         languages(first: 20, orderBy: {field: SIZE, direction: DESC}) {
@@ -143,6 +183,7 @@ query($todayStart: DateTime!, $todayEnd: DateTime!) {
     repositoriesContributedTo(first: 100, contributionTypes: [COMMIT, PULL_REQUEST, REPOSITORY], includeUserRepositories: true) {
       nodes {
         nameWithOwner
+        description
         isPrivate
         isArchived
         pushedAt
@@ -244,6 +285,18 @@ def fetch_today_push_events(username: str, token: str, tz: dt.timezone, today_st
     return pushes_today, commits_today
 
 
+def classify_agendas(repo_records: list[tuple[str, set[str]]]) -> list[tuple[str, str, int]]:
+    """Count repositories matching each domain agenda using generic keywords and languages."""
+    counts = {label: 0 for label, _, _, _ in AGENDA_RULES}
+    for text, langs in repo_records:
+        for label, _, keywords, lang_triggers in AGENDA_RULES:
+            if any(kw in text for kw in keywords) or bool(langs & lang_triggers):
+                counts[label] += 1
+    results = [(label, subtitle, counts[label]) for label, subtitle, _, _ in AGENDA_RULES]
+    results.sort(key=lambda x: -x[2])
+    return results
+
+
 def fetch_via_graphql(username: str, token: str) -> dict:
     tz, today_str, start_utc, end_utc = local_today_bounds(TZ_OFFSET_HOURS)
     target = None
@@ -288,7 +341,9 @@ def fetch_via_graphql(username: str, token: str) -> dict:
 
     repos = list(merged_repos.values())
     lang_totals: dict[str, int] = {}
+    lang_repo_counts: dict[str, int] = {}
     lang_colors: dict[str, str] = {}
+    repo_records: list[tuple[str, set[str]]] = []
     last_push: str | None = None
     private_count = 0
     repos_pushed_today = 0
@@ -303,12 +358,18 @@ def fetch_via_graphql(username: str, token: str) -> dict:
     for repo in repos:
         if repo.get("isPrivate"):
             private_count += 1
+        repo_langs: set[str] = set()
         for edge in repo.get("languages", {}).get("edges", []):
             name = edge["node"]["name"]
             size = edge["size"]
             color = edge["node"].get("color") or DEFAULT_LANG_COLORS.get(name, "#8b949e")
             lang_totals[name] = lang_totals.get(name, 0) + size
             lang_colors.setdefault(name, color)
+            if name not in repo_langs:
+                lang_repo_counts[name] = lang_repo_counts.get(name, 0) + 1
+                repo_langs.add(name)
+        text = f"{repo['nameWithOwner']} {repo.get('description') or ''}".lower()
+        repo_records.append((text, repo_langs))
 
     contrib = target["contributionsCollection"]
     today_contrib = target["todayContributions"]
@@ -327,6 +388,13 @@ def fetch_via_graphql(username: str, token: str) -> dict:
     last_push_local = parse_iso_local_date(last_push, tz) or ""
     effective_last_push = max(last_push_local, cal_last_active) or "N/A"
 
+    languages = [
+        (name, lang_repo_counts.get(name, 1), size, lang_colors.get(name, "#8b949e"))
+        for name, size in lang_totals.items()
+        if name not in IGNORED_ARTIFACT_LANGS
+    ]
+    languages.sort(key=lambda x: (-x[1], -x[2]))
+
     return {
         "repo_count": len(repos),
         "private_count": private_count,
@@ -337,10 +405,8 @@ def fetch_via_graphql(username: str, token: str) -> dict:
         "today_commits": today_commits,
         "last_7d_commits": last_7d_commits,
         "last_30d_commits": last_30d_commits,
-        "languages": sorted(
-            [(name, size, lang_colors.get(name, "#8b949e")) for name, size in lang_totals.items()],
-            key=lambda x: -x[1],
-        ),
+        "agendas": classify_agendas(repo_records),
+        "languages": languages,
         "days": days_26w,
         "scope": "public + private + org/collab" if include_private else "public",
     }
@@ -350,6 +416,8 @@ def fetch_via_rest(username: str) -> dict:
     tz, today_str, _, _ = local_today_bounds(TZ_OFFSET_HOURS)
     repos = http_json(f"https://api.github.com/users/{username}/repos?per_page=100&type=owner")
     lang_totals: dict[str, int] = {}
+    lang_repo_counts: dict[str, int] = {}
+    repo_records: list[tuple[str, set[str]]] = []
     last_push: str | None = None
     repos_pushed_today = 0
 
@@ -364,6 +432,9 @@ def fetch_via_rest(username: str) -> dict:
         langs = http_json(repo["languages_url"])
         for name, size in langs.items():
             lang_totals[name] = lang_totals.get(name, 0) + size
+            lang_repo_counts[name] = lang_repo_counts.get(name, 0) + 1
+        text = f"{repo.get('full_name', repo['name'])} {repo.get('description') or ''}".lower()
+        repo_records.append((text, set(langs.keys())))
 
     events = http_json(f"https://api.github.com/users/{username}/events/public?per_page=100")
     day_counts: dict[str, int] = {}
@@ -390,6 +461,13 @@ def fetch_via_rest(username: str) -> dict:
         d = (today_date - dt.timedelta(days=offset)).isoformat()
         days.append({"date": d, "contributionCount": day_counts.get(d, 0)})
 
+    languages = [
+        (name, lang_repo_counts.get(name, 1), size, DEFAULT_LANG_COLORS.get(name, "#8b949e"))
+        for name, size in lang_totals.items()
+        if name not in IGNORED_ARTIFACT_LANGS
+    ]
+    languages.sort(key=lambda x: (-x[1], -x[2]))
+
     return {
         "repo_count": len(repos),
         "private_count": 0,
@@ -400,10 +478,8 @@ def fetch_via_rest(username: str) -> dict:
         "today_commits": commits_today,
         "last_7d_commits": sum(d["contributionCount"] for d in days[-7:]),
         "last_30d_commits": sum(d["contributionCount"] for d in days[-30:]),
-        "languages": sorted(
-            [(name, size, DEFAULT_LANG_COLORS.get(name, "#8b949e")) for name, size in lang_totals.items()],
-            key=lambda x: -x[1],
-        ),
+        "agendas": classify_agendas(repo_records),
+        "languages": languages,
         "days": days,
         "scope": "public",
     }
@@ -445,63 +521,83 @@ def heat_level(count: int, max_count: int) -> int:
     return 4
 
 
+def estimate_text_width(text: str) -> float:
+    w = 0.0
+    for ch in text:
+        if ch in "iljtIf.,!|:; ":
+            w += 4.2
+        elif ch in "MWmw@#%&":
+            w += 8.6
+        elif ch.isupper():
+            w += 7.2
+        else:
+            w += 6.2
+    return w
+
+
+def compute_pill_layout(languages: list[tuple[str, int, int, str]], max_w: float) -> tuple[list[tuple[str, str, float, float, float]], int]:
+    """Pack language pill badges cleanly within max_w and return (items, total_height)."""
+    pill_h = 22.0
+    gap_x = 6.0
+    gap_y = 6.0
+    cur_x = 0.0
+    cur_y = 0.0
+    placed: list[tuple[str, str, float, float, float]] = []
+
+    for name, _, _, color in languages:
+        pw = round(20.0 + estimate_text_width(name) + 10.0, 1)
+        if cur_x > 0 and cur_x + pw > max_w:
+            cur_x = 0.0
+            cur_y += pill_h + gap_y
+        placed.append((name, color, cur_x, cur_y, pw))
+        cur_x += pw + gap_x
+
+    total_h = int(cur_y + pill_h) if placed else 0
+    return placed, total_h
+
+
 def render_languages_svg(stats: dict, theme_name: str, fixed_height: int) -> str:
     t = THEMES[theme_name]
     width = 392
     pad_x = 26
     inner_w = width - pad_x * 2  # 340px
 
-    languages = stats["languages"]
-    total_bytes = sum(size for _, size, _ in languages) or 1
+    agendas = stats["agendas"]
+    max_agenda = max((count for _, _, count in agendas), default=1) or 1
 
     title_y = 32
-    donut_cx = width / 2
-    donut_cy = 96
-    donut_r = 42
-    donut_stroke = 10
-    circumference = 2 * math.pi * donut_r
+    agenda_start_y = 62
+    agenda_step = 48
 
-    donut_arcs = []
-    cum_len = 0.0
-    for name, size, color in languages:
-        seg_len = (size / total_bytes) * circumference
-        donut_arcs.append(
-            f'<circle cx="{donut_cx:.1f}" cy="{donut_cy:.1f}" r="{donut_r}" '
-            f'fill="none" stroke="{html.escape(color)}" stroke-width="{donut_stroke}" '
-            f'stroke-dasharray="{seg_len:.3f} {circumference:.3f}" '
-            f'stroke-dashoffset="{-cum_len:.3f}" '
-            f'transform="rotate(-90 {donut_cx:.1f} {donut_cy:.1f})" />'
+    agenda_rows = []
+    bar_shades = [t["heat"][4], t["heat"][3], t["heat"][2], t["heat"][2]]
+    for idx, (label, subtitle, count) in enumerate(agendas):
+        ay = agenda_start_y + idx * agenda_step
+        ratio = count / max_agenda if max_agenda > 0 else 0.0
+        fill_w = 0.0 if count == 0 else max(10.0, ratio * (inner_w * 0.9))
+        shade = bar_shades[min(idx, len(bar_shades) - 1)]
+        agenda_rows.append(
+            f'<g transform="translate({pad_x}, {ay})">'
+            f'<text x="0" y="0" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, \'Segoe UI\', Helvetica, Arial, sans-serif" font-size="12" font-weight="600">{html.escape(label)}</text>'
+            f'<text x="{inner_w}" y="0" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5">{count} repos</text>'
+            f'<rect x="0" y="9" width="{inner_w}" height="6" rx="3" fill="{t["track"]}" />'
+            f'<rect x="0" y="9" width="{fill_w:.1f}" height="6" rx="3" fill="{shade}" />'
+            f'<text x="0" y="29" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">{html.escape(subtitle)}</text>'
+            f"</g>"
         )
-        cum_len += seg_len
 
-    # 2-column compact table so all languages fit cleanly alongside the activity card
-    cols = 2
-    col_gap = 18
-    col_w = (inner_w - col_gap) / cols  # 161px
-    rows = max(1, math.ceil(len(languages) / cols))
-    table_header_y = 168
-    table_start_y = 194
-    row_h = 22
+    mid_div_y = 262
+    lang_title_y = 286
+    pills_y = 302
+    placed_pills, _ = compute_pill_layout(stats["languages"], inner_w)
 
-    table_items = []
-    for idx, (name, size, color) in enumerate(languages):
-        row = idx // cols
-        col = idx % cols
-        lx = pad_x + col * (col_w + col_gap)
-        ly = table_start_y + row * row_h
-        pct = format_pct(size / total_bytes)
-        display_name = name if len(name) <= 16 else name[:15] + "…"
-        row_line = (
-            f'<line x1="0" y1="8" x2="{col_w:.1f}" y2="8" stroke="{t["divider"]}" stroke-opacity="0.55" />'
-            if row < rows - 1
-            else ""
-        )
-        table_items.append(
-            f'<g transform="translate({lx:.1f}, {ly:.1f})">'
-            f'<circle cx="3.5" cy="-3.5" r="3.2" fill="{html.escape(color)}" />'
-            f'<text x="12" y="0" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, \'Segoe UI\', Helvetica, Arial, sans-serif" font-size="11" font-weight="500">{html.escape(display_name)}</text>'
-            f'<text x="{col_w:.1f}" y="0" text-anchor="end" fill="{t["text_secondary"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5">{pct}</text>'
-            f"{row_line}"
+    pill_nodes = []
+    for name, color, px, py, pw in placed_pills:
+        pill_nodes.append(
+            f'<g transform="translate({px:.1f}, {py:.1f})">'
+            f'<rect x="0.5" y="0.5" width="{pw - 1:.1f}" height="21" rx="6" fill="{t["panel"]}" stroke="{t["border"]}" />'
+            f'<circle cx="11" cy="11" r="3" fill="{html.escape(color)}" />'
+            f'<text x="19" y="14.5" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, \'Segoe UI\', Helvetica, Arial, sans-serif" font-size="11" font-weight="500">{html.escape(name)}</text>'
             f"</g>"
         )
 
@@ -511,25 +607,26 @@ def render_languages_svg(stats: dict, theme_name: str, fixed_height: int) -> str
   <rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="10" fill="{t["bg"]}" stroke="{t["border"]}" />
 
   <text x="{pad_x}" y="{title_y}" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5" letter-spacing="1.4">
-    ALL LANGUAGES
+    AGENDA FOCUS
+  </text>
+  <text x="{width - pad_x}" y="{title_y}" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10">
+    {stats["repo_count"]} repos
   </text>
 
-  <g>
-    <circle cx="{donut_cx:.1f}" cy="{donut_cy:.1f}" r="{donut_r}" fill="none" stroke="{t["track"]}" stroke-width="{donut_stroke}" />
-    {"".join(donut_arcs)}
-    <text x="{donut_cx:.1f}" y="{donut_cy + 3:.1f}" text-anchor="middle" fill="{t["text_primary"]}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="600">{len(languages)}</text>
-    <text x="{donut_cx:.1f}" y="{donut_cy + 17:.1f}" text-anchor="middle" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1.2">LANGS</text>
-  </g>
+  {"".join(agenda_rows)}
 
-  <g transform="translate({pad_x}, {table_header_y})">
-    <text x="0" y="0" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1">LANGUAGE</text>
-    <text x="{col_w:.1f}" y="0" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1">SHARE</text>
-    <text x="{col_w + col_gap:.1f}" y="0" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1">LANGUAGE</text>
-    <text x="{inner_w}" y="0" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9" letter-spacing="1">SHARE</text>
-    <line x1="0" y1="7" x2="{inner_w}" y2="7" stroke="{t["divider"]}" />
-  </g>
+  <line x1="{pad_x}" y1="{mid_div_y}" x2="{width - pad_x}" y2="{mid_div_y}" stroke="{t["divider"]}" />
 
-  {"".join(table_items)}
+  <text x="{pad_x}" y="{lang_title_y}" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10.5" letter-spacing="1.4">
+    LANGUAGES USED
+  </text>
+  <text x="{width - pad_x}" y="{lang_title_y}" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10">
+    {len(stats["languages"])} langs
+  </text>
+
+  <g transform="translate({pad_x}, {pills_y})">
+    {"".join(pill_nodes)}
+  </g>
 </svg>
 """
 
@@ -671,8 +768,8 @@ def main() -> None:
     else:
         stats = fetch_via_rest(USERNAME)
 
-    lang_rows = max(1, math.ceil(len(stats["languages"]) / 2))
-    lang_min_height = 194 + lang_rows * 22 + 18
+    _, pills_h = compute_pill_layout(stats["languages"], 340)
+    lang_min_height = 302 + pills_h + 24
     act_min_height = 476
     fixed_height = max(lang_min_height, act_min_height)
 

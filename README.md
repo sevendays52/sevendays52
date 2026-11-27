@@ -1,16 +1,8 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/header-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/header-light.svg" />
-    <img alt="HanJoo Kim — Monochrome Lab" src="./assets/header-dark.svg" width="100%" />
-  </picture>
-</p>
-
-<p align="center">
-  <sub>
-    Incoming M.S. Student · Exploring <b>AI Pipelines</b>, <b>Unity 3D Worlds</b>, <b>Virtual Streaming</b> &amp; <b>Data</b>.
-  </sub>
-</p>
+<div align="center">
+  <h1>HanJoo Kim</h1>
+  <p><samp>AI Engineering · Virtual Streaming · Unity 3D · Data</samp></p>
+  <p><sub>Incoming M.S. Student — exploring where generative AI, 3D worlds, and virtual media meet.</sub></p>
+</div>
 
 <br />
 

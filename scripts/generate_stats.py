@@ -66,11 +66,27 @@ DEFAULT_LANG_COLORS = {
 GRAPHQL_USER_QUERY = """
 query($login: String!, $todayStart: DateTime!, $todayEnd: DateTime!) {
   user(login: $login) {
-    repositories(first: 100, ownerAffiliations: [OWNER], isArchived: false) {
-      totalCount
+    repositories(first: 100, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], isArchived: false) {
       nodes {
-        name
+        nameWithOwner
         isPrivate
+        pushedAt
+        languages(first: 20, orderBy: {field: SIZE, direction: DESC}) {
+          edges {
+            size
+            node {
+              name
+              color
+            }
+          }
+        }
+      }
+    }
+    repositoriesContributedTo(first: 100, contributionTypes: [COMMIT, PULL_REQUEST, REPOSITORY], includeUserRepositories: true) {
+      nodes {
+        nameWithOwner
+        isPrivate
+        isArchived
         pushedAt
         languages(first: 20, orderBy: {field: SIZE, direction: DESC}) {
           edges {
@@ -108,11 +124,27 @@ GRAPHQL_VIEWER_QUERY = """
 query($todayStart: DateTime!, $todayEnd: DateTime!) {
   viewer {
     login
-    repositories(first: 100, ownerAffiliations: [OWNER], isArchived: false) {
-      totalCount
+    repositories(first: 100, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], isArchived: false) {
       nodes {
-        name
+        nameWithOwner
         isPrivate
+        pushedAt
+        languages(first: 20, orderBy: {field: SIZE, direction: DESC}) {
+          edges {
+            size
+            node {
+              name
+              color
+            }
+          }
+        }
+      }
+    }
+    repositoriesContributedTo(first: 100, contributionTypes: [COMMIT, PULL_REQUEST, REPOSITORY], includeUserRepositories: true) {
+      nodes {
+        nameWithOwner
+        isPrivate
+        isArchived
         pushedAt
         languages(first: 20, orderBy: {field: SIZE, direction: DESC}) {
           edges {
@@ -246,21 +278,31 @@ def fetch_via_graphql(username: str, token: str) -> dict:
             raise RuntimeError(f"GraphQL error: {resp['errors']}")
         target = resp["data"]["user"]
 
-    repos = target["repositories"]["nodes"]
+    affiliated_nodes = target["repositories"]["nodes"]
+    contributed_nodes = [
+        n for n in target.get("repositoriesContributedTo", {}).get("nodes", []) if not n.get("isArchived")
+    ]
+    merged_repos: dict[str, dict] = {}
+    for repo in affiliated_nodes + contributed_nodes:
+        merged_repos[repo["nameWithOwner"]] = repo
+
+    repos = list(merged_repos.values())
     lang_totals: dict[str, int] = {}
     lang_colors: dict[str, str] = {}
     last_push: str | None = None
     private_count = 0
     repos_pushed_today = 0
 
-    for repo in repos:
-        if repo.get("isPrivate"):
-            private_count += 1
+    for repo in affiliated_nodes:
         pushed_at = repo.get("pushedAt")
         if pushed_at and (last_push is None or pushed_at > last_push):
             last_push = pushed_at
         if parse_iso_local_date(pushed_at, tz) == today_str:
             repos_pushed_today += 1
+
+    for repo in repos:
+        if repo.get("isPrivate"):
+            private_count += 1
         for edge in repo.get("languages", {}).get("edges", []):
             name = edge["node"]["name"]
             size = edge["size"]
@@ -280,11 +322,16 @@ def fetch_via_graphql(username: str, token: str) -> dict:
     last_7d_commits = sum(d["contributionCount"] for d in days[-7:])
     last_30d_commits = sum(d["contributionCount"] for d in days[-30:])
 
+    # Ensure last_push also reflects contributions on org repos that weren't in affiliated_nodes
+    cal_last_active = max((d["date"] for d in days if d["contributionCount"] > 0), default="")
+    last_push_local = parse_iso_local_date(last_push, tz) or ""
+    effective_last_push = max(last_push_local, cal_last_active) or "N/A"
+
     return {
-        "repo_count": target["repositories"]["totalCount"],
+        "repo_count": len(repos),
         "private_count": private_count,
         "total_contributions": contrib["contributionCalendar"]["totalContributions"],
-        "last_push": parse_iso_local_date(last_push, tz) or "N/A",
+        "last_push": effective_last_push,
         "today_date": today_str,
         "today_pushes": today_pushes,
         "today_commits": today_commits,
@@ -295,7 +342,7 @@ def fetch_via_graphql(username: str, token: str) -> dict:
             key=lambda x: -x[1],
         ),
         "days": days_26w,
-        "scope": "public + private" if include_private else "public",
+        "scope": "public + private + org/collab" if include_private else "public",
     }
 
 

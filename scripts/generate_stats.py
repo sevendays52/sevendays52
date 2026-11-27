@@ -12,6 +12,7 @@ import html
 import json
 import math
 import os
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -757,6 +758,19 @@ def render_activity_svg(stats: dict, theme_name: str, fixed_height: int) -> str:
 """
 
 
+def strip_sync_timestamp(svg_text: str) -> str:
+    return re.sub(r"synced · [^\n<]+", "synced · TIMESTAMP", svg_text)
+
+
+def write_svg_if_changed(path: Path, content: str) -> bool:
+    if path.exists():
+        old = path.read_text(encoding="utf-8")
+        if strip_sync_timestamp(old) == strip_sync_timestamp(content):
+            return False
+    path.write_text(content, encoding="utf-8")
+    return True
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if TOKEN:
@@ -776,11 +790,12 @@ def main() -> None:
     for theme_name in ("dark", "light"):
         lang_path = OUT_DIR / f"lang-{theme_name}.svg"
         act_path = OUT_DIR / f"activity-{theme_name}.svg"
-        lang_path.write_text(render_languages_svg(stats, theme_name, fixed_height), encoding="utf-8")
-        act_path.write_text(render_activity_svg(stats, theme_name, fixed_height), encoding="utf-8")
+        lang_changed = write_svg_if_changed(lang_path, render_languages_svg(stats, theme_name, fixed_height))
+        act_changed = write_svg_if_changed(act_path, render_activity_svg(stats, theme_name, fixed_height))
         print(
-            f"Wrote {lang_path.name} & {act_path.name} (height={fixed_height}, scope={stats['scope']}, "
-            f"repos={stats['repo_count']}, private={stats['private_count']}, {len(stats['languages'])} languages, last_push={stats['last_push']})"
+            f"Checked {lang_path.name} (changed={lang_changed}) & {act_path.name} (changed={act_changed}) "
+            f"(height={fixed_height}, scope={stats['scope']}, repos={stats['repo_count']}, "
+            f"private={stats['private_count']}, {len(stats['languages'])} languages, last_push={stats['last_push']})"
         )
 
 

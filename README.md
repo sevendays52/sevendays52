@@ -1,7 +1,7 @@
 <div align="center">
   <h1>HanJoo Kim</h1>
   <p><samp>AI Engineering · Virtual Streaming · Unity 3D · Data</samp></p>
-  <p><sub>Exploring where generative AI, 3D worlds, and Virtual Streaming meet.</sub></p>
+  <p><sub>Reading the landscape through data, shipping ideas at the speed of thought, and turning them into research.</sub></p>
 </div>
 
 <br />

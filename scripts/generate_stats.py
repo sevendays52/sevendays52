@@ -664,7 +664,7 @@ def render_activity_svg(stats: dict, theme_name: str, fixed_height: int) -> str:
 
     legend_boxes = []
     for lvl in range(5):
-        lx = inner_w - 58 + lvl * 12
+        lx = inner_w - 87 + lvl * 12
         legend_boxes.append(f'<rect x="{lx}" y="-8" width="9" height="9" rx="1.5" fill="{t["heat"][lvl]}" />')
 
     mid_div_y = legend_y + 18
@@ -713,7 +713,7 @@ def render_activity_svg(stats: dict, theme_name: str, fixed_height: int) -> str:
 
   <g transform="translate({pad_x}, {legend_y})">
     <text x="0" y="0" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="10">7d total: {stats["last_7d_commits"]}</text>
-    <text x="{inner_w - 66}" y="0" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">Less</text>
+    <text x="{inner_w - 94}" y="0" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">Less</text>
     {"".join(legend_boxes)}
     <text x="{inner_w}" y="0" text-anchor="end" fill="{t["text_muted"]}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="9.5">More</text>
   </g>
